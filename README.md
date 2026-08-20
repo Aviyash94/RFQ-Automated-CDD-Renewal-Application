@@ -28,6 +28,35 @@ shared/     → Shared TypeScript types
 - Docker Desktop (for PostgreSQL, Redis, Mailhog)
 - npm
 
+## Docker Deployment (full stack)
+
+Run the entire application with Docker Desktop:
+
+```bash
+cd docker
+docker compose -f docker-compose.deploy.yml up --build -d
+```
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| API | http://localhost:3001/api/v1 |
+| Swagger | http://localhost:3001/api/docs |
+| Mailhog | http://localhost:8025 |
+
+Stop the stack:
+
+```bash
+cd docker
+docker compose -f docker-compose.deploy.yml down
+```
+
+Remove volumes (reset database and uploads):
+
+```bash
+docker compose -f docker-compose.deploy.yml down -v
+```
+
 ## Quick Start
 
 ### 1. Start infrastructure

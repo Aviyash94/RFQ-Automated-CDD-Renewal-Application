@@ -1,0 +1,127 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: cdd-postgres
+    environment:
+      POSTGRES_USER: cdd_user
+      POSTGRES_PASSWORD: cdd_password
+      POSTGRES_DB: cdd_renewal
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cdd_user -d cdd_renewal"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: cdd-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: cdd-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+  seed:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    container_name: cdd-seed
+    command: ["node", "dist/database/seed.js"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: cdd_user
+      DB_PASSWORD: cdd_password
+      DB_DATABASE: cdd_renewal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  server:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    container_name: cdd-server
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      CLIENT_URL: http://10.20.1.48:3000
+      COOKIE_SECURE: "false"
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: cdd_user
+      DB_PASSWORD: cdd_password
+      DB_DATABASE: cdd_renewal
+      JWT_SECRET: docker-local-jwt-secret-change-for-real-production
+      JWT_ACCESS_EXPIRY: 15m
+      JWT_REFRESH_EXPIRY: 7d
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_FROM: noreply@cdd.local
+      ORACLE_ENABLED: "false"
+      UPLOAD_DIR: /app/uploads
+      AI_VALIDATION_PROVIDER: mock
+    volumes:
+      - server_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/v1/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ../client
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://10.20.1.48:3001/api/v1
+    container_name: cdd-client
+    ports:
+      - "3000:3000"
+    depends_on:
+      server:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  server_uploads:

@@ -84,7 +84,7 @@ export class AuthService {
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
-      secure: this.config.get('NODE_ENV') === 'production',
+      secure: this.config.get<boolean>('cookieSecure'),
       sameSite: 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
@@ -150,7 +150,11 @@ export class AuthService {
       const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
       await this.refreshRepo.update({ tokenHash }, { isRevoked: true });
     }
-    res.clearCookie('refresh_token');
+    res.clearCookie('refresh_token', {
+      httpOnly: true,
+      secure: this.config.get<boolean>('cookieSecure'),
+      sameSite: 'lax',
+    });
     return { message: 'Logged out successfully' };
   }
 }
